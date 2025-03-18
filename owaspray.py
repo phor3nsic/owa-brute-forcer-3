@@ -243,7 +243,7 @@ def login(user_pwd):
             cookies = r.cookies
             cookie_num = len(cookies)
             if cookie_num >= num_cookies:
-                msg = '[+++] Jackpot => "%s" : "%s"' % (user, pwd)
+                msg = '[+++] PWNED => "%s" : "%s"' % (user, pwd)
                 lock.acquire()
                 write_log(msg)
                 print(msg)
