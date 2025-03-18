@@ -222,7 +222,7 @@ class Spray:
         random_message = messages[position]
         msg = "\n[*] Waiting %s minute(s) in order to avoid account lockout. %s" % (window, random_message)
         print(msg)
-        time.sleep(window * 3 * 60)  # Triplicar o valor do timeout
+        time.sleep(window * 3 * 60)  
 
 def login(user_pwd):
     """
